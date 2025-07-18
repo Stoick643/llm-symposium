@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - LLM Symposium{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <!-- Header -->
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900">Conversation Dashboard</h2>
+        <p class="mt-2 text-gray-600">Monitor and analyze AI-to-AI conversations</p>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold">💬</span>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Total Conversations</dt>
+                            <dd class="text-lg font-medium text-gray-900">{{ stats.total_conversations }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold">✅</span>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Completed</dt>
+                            <dd class="text-lg font-medium text-gray-900">{{ stats.completed_conversations }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold">🔄</span>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Active</dt>
+                            <dd class="text-lg font-medium text-gray-900">{{ stats.active_conversations }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold">💰</span>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Avg Cost</dt>
+                            <dd class="text-lg font-medium text-gray-900">${{ "%.4f"|format(stats.avg_cost_per_conversation) }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="mb-6">
+        <div class="flex flex-col sm:flex-row gap-4">
+            <div class="flex-1">
+                <input type="search" id="searchInput" placeholder="Search conversations..." 
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="flex gap-2">
+                <select id="templateFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Templates</option>
+                    <option value="debate">Debate</option>
+                    <option value="collaboration">Collaboration</option>
+                    <option value="socratic">Socratic</option>
+                    <option value="creative">Creative</option>
+                    <option value="technical">Technical</option>
+                    <option value="learning">Learning</option>
+                </select>
+                <button id="searchBtn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                    Search
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conversations List -->
+    <div class="bg-white shadow overflow-hidden sm:rounded-md">
+        <div class="px-4 py-5 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Recent Conversations</h3>
+            <p class="mt-1 max-w-2xl text-sm text-gray-500">Latest AI-to-AI conversations</p>
+        </div>
+        
+        <ul id="conversationsList" class="divide-y divide-gray-200">
+            {% for conversation in conversations.items %}
+            <li class="conversation-card">
+                <a href="{{ url_for('conversation_detail', conversation_id=conversation.id) }}" class="block hover:bg-gray-50">
+                    <div class="px-4 py-4 sm:px-6">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-blue-600 truncate">
+                                    {{ conversation.model_1 }} vs {{ conversation.model_2 }}
+                                </p>
+                                <p class="mt-1 text-sm text-gray-900">
+                                    {{ conversation.initial_prompt[:100] }}{% if conversation.initial_prompt|length > 100 %}...{% endif %}
+                                </p>
+                                {% if conversation.summary %}
+                                <p class="mt-1 text-sm text-gray-500">
+                                    {{ conversation.summary[:150] }}{% if conversation.summary|length > 150 %}...{% endif %}
+                                </p>
+                                {% endif %}
+                            </div>
+                            <div class="flex-shrink-0 flex flex-col items-end">
+                                <p class="text-sm text-gray-500">
+                                    {{ conversation.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                </p>
+                                <div class="flex items-center mt-1">
+                                    {% if conversation.template %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">
+                                        {{ conversation.template }}
+                                    </span>
+                                    {% endif %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                        {% if conversation.status == 'completed' %}bg-green-100 text-green-800{% elif conversation.status == 'active' %}bg-yellow-100 text-yellow-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                        {{ conversation.status }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2 flex items-center justify-between">
+                            <div class="flex items-center text-sm text-gray-500">
+                                <span class="mr-4">{{ conversation.total_turns }} turns</span>
+                                <span class="mr-4">${{ "%.4f"|format(conversation.total_cost) }}</span>
+                                <span>{{ conversation.mode }} mode</span>
+                            </div>
+                            {% if conversation.get_keywords() %}
+                            <div class="flex flex-wrap gap-1">
+                                {% for keyword in conversation.get_keywords()[:3] %}
+                                <span class="keyword-tag inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white">
+                                    {{ keyword }}
+                                </span>
+                                {% endfor %}
+                                {% if conversation.get_keywords()|length > 3 %}
+                                <span class="text-xs text-gray-500">+{{ conversation.get_keywords()|length - 3 }} more</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        
+        <!-- Pagination -->
+        {% if conversations.pages > 1 %}
+        <div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+            <div class="flex justify-between items-center">
+                <div class="text-sm text-gray-700">
+                    Showing {{ conversations.per_page * (conversations.page - 1) + 1 }} to 
+                    {{ conversations.per_page * conversations.page if conversations.has_next else conversations.total }} 
+                    of {{ conversations.total }} results
+                </div>
+                <div class="flex space-x-2">
+                    {% if conversations.has_prev %}
+                    <a href="{{ url_for('index', page=conversations.prev_num) }}" 
+                       class="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                        Previous
+                    </a>
+                    {% endif %}
+                    {% if conversations.has_next %}
+                    <a href="{{ url_for('index', page=conversations.next_num) }}" 
+                       class="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                        Next
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Search functionality
+    document.getElementById('searchBtn').addEventListener('click', function() {
+        const query = document.getElementById('searchInput').value;
+        const template = document.getElementById('templateFilter').value;
+        
+        let url = new URL(window.location.href);
+        url.searchParams.set('page', '1');
+        
+        if (query) {
+            url.searchParams.set('q', query);
+        } else {
+            url.searchParams.delete('q');
+        }
+        
+        if (template) {
+            url.searchParams.set('template', template);
+        } else {
+            url.searchParams.delete('template');
+        }
+        
+        window.location.href = url.toString();
+    });
+    
+    // Enter key search
+    document.getElementById('searchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('searchBtn').click();
+        }
+    });
+</script>
+{% endblock %}

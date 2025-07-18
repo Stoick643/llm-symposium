@@ -1,0 +1,15 @@
+{
+  "models": [
+    "kimi-k2-0711-preview",
+    "kimi-k2-0711-preview"
+  ],
+  "mode": "full",
+  "window_size": 10,
+  "template": "debate",
+  "turns": 10,
+  "ai_aware_mode": true,
+  "delay_between_turns": 0.1,
+  "save_format": "markdown",
+  "enable_quality_metrics": false,
+  "initial_prompt": "Let's explore Borgia family, at the peak of their powerc. Discuss politics, art, economy, and their influence on the Renaissance. Be concise."
+}

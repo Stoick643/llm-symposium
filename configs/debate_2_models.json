@@ -1,0 +1,15 @@
+{
+  "models": [
+    "claude-3-sonnet-20240229",
+    "gpt-4"
+  ],
+  "mode": "full",
+  "window_size": 10,
+  "template": "debate",
+  "turns": 20,
+  "ai_aware_mode": false,
+  "delay_between_turns": 0.5,
+  "save_format": "markdown",
+  "enable_quality_metrics": false,
+  "initial_prompt": "Should artificial intelligence have legal rights similar to humans?"
+}

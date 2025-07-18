@@ -1,0 +1,15 @@
+{
+  "models": [
+    "kimi-k2-0711-preview",
+    "deepseek-chat"
+  ],
+  "mode": "full",
+  "window_size": 10,
+  "template": null,
+  "turns": 15,
+  "ai_aware_mode": false,
+  "delay_between_turns": 0.5,
+  "save_format": "markdown",
+  "enable_quality_metrics": false,
+  "initial_prompt": "Let's discuss the future of AI in simple terms."
+}

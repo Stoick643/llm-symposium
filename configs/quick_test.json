@@ -1,0 +1,15 @@
+{
+  "models": [
+    "deepseek-chat",
+    "deepseek-chat"
+  ],
+  "mode": "full",
+  "window_size": 5,
+  "template": null,
+  "turns": 5,
+  "ai_aware_mode": false,
+  "delay_between_turns": 0.2,
+  "save_format": "markdown",
+  "enable_quality_metrics": false,
+  "initial_prompt": "Quick test conversation - just say hello and introduce yourselves."
+}

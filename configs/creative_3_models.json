@@ -1,0 +1,16 @@
+{
+  "models": [
+    "claude-3-sonnet-20240229",
+    "gpt-4",
+    "deepseek-chat"
+  ],
+  "mode": "sliding",
+  "window_size": 8,
+  "template": "creative",
+  "turns": 30,
+  "ai_aware_mode": true,
+  "delay_between_turns": 1.0,
+  "save_format": "markdown",
+  "enable_quality_metrics": false,
+  "initial_prompt": "Let's collaboratively create a science fiction world where emotions have physical properties."
+}
