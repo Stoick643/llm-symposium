@@ -20,8 +20,8 @@ class Conversation(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Configuration
-    model_1 = db.Column(db.String(100), nullable=False)
-    model_2 = db.Column(db.String(100), nullable=False)
+    models = db.Column(db.Text, nullable=False)  # JSON array of model names
+    model_count = db.Column(db.Integer, nullable=False, default=2)
     mode = db.Column(db.String(20), nullable=False)  # 'full', 'sliding', 'cache', 'sliding_cache'
     window_size = db.Column(db.Integer)
     template = db.Column(db.String(50))
@@ -57,8 +57,8 @@ class Conversation(db.Model):
             'id': self.id,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
-            'model_1': self.model_1,
-            'model_2': self.model_2,
+            'models': self.get_models(),
+            'model_count': self.model_count,
             'mode': self.mode,
             'window_size': self.window_size,
             'template': self.template,
@@ -79,6 +79,15 @@ class Conversation(db.Model):
             'keywords_model': self.keywords_model
         }
     
+    def set_models(self, models_list):
+        """Set models from a list."""
+        self.models = json.dumps(models_list) if models_list else None
+        self.model_count = len(models_list) if models_list else 0
+    
+    def get_models(self):
+        """Get models as a list."""
+        return json.loads(self.models) if self.models else []
+    
     def set_keywords(self, keywords_list):
         """Set keywords from a list."""
         self.keywords = json.dumps(keywords_list) if keywords_list else None
@@ -88,7 +97,12 @@ class Conversation(db.Model):
         return json.loads(self.keywords) if self.keywords else []
     
     def __repr__(self):
-        return f'<Conversation {self.id}: {self.model_1} vs {self.model_2}>'
+        models = self.get_models()
+        if len(models) <= 3:
+            model_display = " vs ".join(models)
+        else:
+            model_display = f"{models[0]} vs {models[1]} (+{len(models)-2} more)"
+        return f'<Conversation {self.id}: {model_display}>'
 
 
 class Turn(db.Model):
