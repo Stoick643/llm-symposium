@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from conversation_manager import LLMConversation
 from models import ConversationTurn, ConversationMetrics
+from config_manager import ConversationConfig
 
 
 class TestLLMConversation:
@@ -16,16 +17,16 @@ class TestLLMConversation:
         with patch('conversation_manager.anthropic.Anthropic'), \
              patch('conversation_manager.OpenAI'):
             
-            conversation = LLMConversation(api_key=mock_api_keys['anthropic'])
+            config = ConversationConfig(models=["claude-3-sonnet-20240229", "claude-3-sonnet-20240229"])
+            conversation = LLMConversation(config=config, api_key=mock_api_keys['anthropic'])
             
-            assert conversation.model_1 == "claude-3-sonnet-20240229"
-            assert conversation.model_2 == "claude-3-sonnet-20240229"
-            assert conversation.ai_aware_mode is False
-            assert conversation.mode == "full"
-            assert conversation.window_size == 10
-            assert conversation.template is None
+            assert conversation.models == ["claude-3-sonnet-20240229", "claude-3-sonnet-20240229"]
+            assert conversation.config.ai_aware_mode is False
+            assert conversation.config.mode == "full"
+            assert conversation.config.window_size == 10
+            assert conversation.config.template is None
             assert conversation.template_config is None
-            assert conversation.enable_quality_metrics is False
+            assert conversation.config.enable_quality_metrics is False
             assert conversation.conversation_history == []
             assert conversation.total_input_tokens == 0
             assert conversation.total_output_tokens == 0
@@ -37,25 +38,23 @@ class TestLLMConversation:
         with patch('conversation_manager.anthropic.Anthropic'), \
              patch('conversation_manager.OpenAI'):
             
-            conversation = LLMConversation(
-                api_key=mock_api_keys['anthropic'],
-                model_1="gpt-4",
-                model_2="claude-3-opus-20240229",
+            config = ConversationConfig(
+                models=["gpt-4", "claude-3-opus-20240229"],
                 ai_aware_mode=True,
                 mode="sliding",
                 window_size=5,
                 template="debate",
                 enable_quality_metrics=True
             )
+            conversation = LLMConversation(config=config, api_key=mock_api_keys['anthropic'])
             
-            assert conversation.model_1 == "gpt-4"
-            assert conversation.model_2 == "claude-3-opus-20240229"
-            assert conversation.ai_aware_mode is True
-            assert conversation.mode == "sliding"
-            assert conversation.window_size == 5
-            assert conversation.template == "debate"
+            assert conversation.models == ["gpt-4", "claude-3-opus-20240229"]
+            assert conversation.config.ai_aware_mode is True
+            assert conversation.config.mode == "sliding"
+            assert conversation.config.window_size == 5
+            assert conversation.config.template == "debate"
             assert conversation.template_config is not None
-            assert conversation.enable_quality_metrics is True
+            assert conversation.config.enable_quality_metrics is True
     
     def test_get_pricing_claude(self, mock_conversation):
         """Test pricing retrieval for Claude models."""
@@ -242,9 +241,13 @@ class TestLLMConversation:
         with patch('conversation_manager.anthropic.Anthropic'), \
              patch('conversation_manager.OpenAI'):
             
-            conversation = LLMConversation(
-                api_key=mock_api_keys['anthropic'],
+            config = ConversationConfig(
+                models=["claude-3-sonnet-20240229", "claude-3-sonnet-20240229"],
                 template="debate"
+            )
+            conversation = LLMConversation(
+                config=config,
+                api_key=mock_api_keys['anthropic']
             )
             conversation._call_anthropic_model = Mock(return_value=("Test response", 50, 100, 1.0))
             
@@ -265,9 +268,13 @@ class TestLLMConversation:
         with patch('conversation_manager.anthropic.Anthropic'), \
              patch('conversation_manager.OpenAI'):
             
-            conversation = LLMConversation(
-                api_key=mock_api_keys['anthropic'],
+            config = ConversationConfig(
+                models=["claude-3-sonnet-20240229", "claude-3-sonnet-20240229"],
                 ai_aware_mode=True
+            )
+            conversation = LLMConversation(
+                config=config,
+                api_key=mock_api_keys['anthropic']
             )
             conversation._call_anthropic_model = Mock(return_value=("Test response", 50, 100, 1.0))
             

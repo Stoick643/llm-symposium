@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 from template_manager import TemplateManager
 from conversation_manager import LLMConversation
 from models import ConversationTurn, ConversationMetrics
+from config_manager import ConversationConfig
 
 
 @pytest.fixture
@@ -59,10 +60,15 @@ def mock_conversation():
     with patch('conversation_manager.anthropic.Anthropic'), \
          patch('conversation_manager.OpenAI'):
         
+        config = ConversationConfig(
+            models=["test-model-1", "test-model-2"],
+            mode="full",
+            turns=10
+        )
+        
         conversation = LLMConversation(
-            api_key="test-key",
-            model_1="test-model-1",
-            model_2="test-model-2"
+            config=config,
+            api_key="test-key"
         )
         
         # Mock the API call methods

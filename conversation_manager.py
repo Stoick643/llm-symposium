@@ -232,6 +232,16 @@ Feel free to innovate in how you communicate, while keeping the conversation mea
         Returns:
             ConversationMetrics object with detailed statistics
         """
+        self._display_conversation_header(initial_prompt, real_time_display)
+        self._initialize_database_conversation(initial_prompt)
+        
+        return self._run_conversation_loop(initial_prompt, max_turns, delay_between_turns, real_time_display)
+    
+    def _display_conversation_header(self, initial_prompt: str, real_time_display: bool) -> None:
+        """Display conversation configuration information."""
+        if not real_time_display:
+            return
+            
         print(f"Starting conversation with initial prompt: {initial_prompt}")
         for i, model in enumerate(self.models, 1):
             print(f"Model {i}: {model}")
@@ -244,8 +254,9 @@ Feel free to innovate in how you communicate, while keeping the conversation mea
         if self.config.enable_quality_metrics:
             print(f"Quality Metrics: Enabled (using embeddings)")
         print("-" * 60)
-        
-        # Create database conversation if enabled
+    
+    def _initialize_database_conversation(self, initial_prompt: str) -> None:
+        """Initialize database conversation if enabled."""
         if self.save_to_db:
             self.conversation_id = create_conversation(
                 models=self.models,

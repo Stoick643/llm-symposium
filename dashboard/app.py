@@ -33,7 +33,8 @@ def create_app():
     app = Flask(__name__)
     
     # Configuration
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+    import secrets
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_urlsafe(32))
     # Use absolute path for database
     project_root = os.path.dirname(os.path.dirname(__file__))
     db_path = os.path.join(project_root, 'instance', 'conversations.db')
@@ -43,8 +44,9 @@ def create_app():
     # Initialize database
     init_database(app)
     
-    # Initialize SocketIO
-    socketio = SocketIO(app, cors_allowed_origins="*")
+    # Initialize SocketIO with appropriate CORS settings
+    cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+    socketio = SocketIO(app, cors_allowed_origins=cors_origins)
     
     # Routes
     @app.route('/')
@@ -192,8 +194,12 @@ if __name__ == '__main__':
     # Run the app
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    is_development = os.environ.get('FLASK_ENV', 'production') == 'development'
     
     print(f"Starting Flask dashboard on port {port}")
     print(f"Debug mode: {debug}")
+    print(f"Environment: {'development' if is_development else 'production'}")
     
-    socketio.run(app, host='0.0.0.0', port=port, debug=debug, allow_unsafe_werkzeug=True)
+    # Only allow unsafe Werkzeug in development
+    socketio.run(app, host='0.0.0.0', port=port, debug=debug, 
+                allow_unsafe_werkzeug=is_development)
