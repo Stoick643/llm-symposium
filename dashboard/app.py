@@ -445,66 +445,130 @@ def create_app():
             
             conversation = live_conversations[conversation_id]
             
-            # Import conversation manager
-            from conversation_manager import ConversationManager
+            # Import conversation manager and config
+            from conversation_manager import LLMConversation
+            from config_manager import ConversationConfig
+            from models import ConversationTurn
+            from database_service import save_turn
+            import os
+            import time as time_module
             
             # Set up conversation configuration
-            config = {
-                'model1': conversation['models'][0],
-                'model2': conversation['models'][1] if len(conversation['models']) > 1 else conversation['models'][0],
-                'template': conversation['template'],
-                'ai_aware_mode': True,
-                'mode': 'full',
-                'max_turns': 10,  # Limit for live conversations
-                'save_to_db': True,
-                'enable_tts': False  # Disable TTS for live streaming to reduce latency
-            }
+            config = ConversationConfig(
+                models=conversation['models'],
+                template=conversation['template'],
+                ai_aware_mode=True,
+                mode='full',
+                enable_quality_metrics=False
+            )
+            
+            # Get API keys from environment
+            api_key = os.environ.get('ANTHROPIC_API_KEY')
+            openai_api_key = os.environ.get('OPENAI_API_KEY')
+            deepseek_api_key = os.environ.get('DEEPSEEK_API_KEY')
+            moonshot_api_key = os.environ.get('MOONSHOT_API_KEY')
+            
+            if not api_key:
+                raise Exception("ANTHROPIC_API_KEY environment variable not set")
             
             # Create conversation manager
-            manager = ConversationManager(config)
+            manager = LLMConversation(
+                config=config,
+                api_key=api_key,
+                openai_api_key=openai_api_key,
+                deepseek_api_key=deepseek_api_key,
+                moonshot_api_key=moonshot_api_key,
+                save_to_db=True
+            )
+            
+            # Initialize database conversation
+            initial_prompt = f"Let's have a {conversation['template']} about: {conversation['topic']}"
+            manager._initialize_database_conversation(initial_prompt)
             
             # Start conversation loop
             turn_count = 0
+            max_turns = 10  # Limit for live conversations
+            current_prompt = initial_prompt
+            
             while (conversation['status'] == 'running' and 
-                   turn_count < config['max_turns'] and 
+                   turn_count < max_turns and 
                    conversation_id in live_conversations):
                 
                 try:
-                    # Execute one turn
-                    success = manager.execute_turn()
+                    # Get current model for this turn
+                    current_model = manager.models[manager.current_model_index]
                     
-                    if not success:
+                    # Get conversation context for current model
+                    context = manager._build_context_for_model(current_model)
+                    
+                    # Get response from current model
+                    response, input_tokens, output_tokens, response_time = manager._call_model(
+                        current_model, current_prompt, context
+                    )
+                    
+                    # Check for error responses
+                    if response.startswith("Error:"):
+                        print(f"Model error on turn {turn_count + 1}: {response}")
                         break
+                    
+                    # Update metrics
+                    manager.total_input_tokens += input_tokens
+                    manager.total_output_tokens += output_tokens
+                    manager.response_times.append(response_time)
+                    
+                    # Store the turn
+                    conversation_turn = ConversationTurn(
+                        speaker=current_model,
+                        message=response,
+                        timestamp=time_module.time()
+                    )
+                    manager.conversation_history.append(conversation_turn)
+                    
+                    # Save turn to database if enabled
+                    if manager.save_to_db and manager.conversation_id:
+                        save_turn(
+                            conversation_id=manager.conversation_id,
+                            turn_number=turn_count + 1,
+                            speaker=current_model,
+                            message=response,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            response_time=response_time,
+                            context_size=len(context)
+                        )
                     
                     turn_count += 1
                     
-                    # Get the latest turn from the conversation
-                    latest_turn = manager.conversation_turns[-1] if manager.conversation_turns else None
+                    # Update live conversation data
+                    turn_data = {
+                        'turn_number': turn_count,
+                        'speaker': current_model,
+                        'message': response,
+                        'timestamp': datetime.utcnow().isoformat()
+                    }
                     
-                    if latest_turn:
-                        # Update live conversation data
-                        turn_data = {
-                            'turn_number': turn_count,
-                            'speaker': latest_turn.get('speaker', 'Unknown'),
-                            'message': latest_turn.get('message', ''),
-                            'timestamp': datetime.utcnow().isoformat()
-                        }
-                        
-                        conversation['turns'].append(turn_data)
-                        conversation['current_turn'] = turn_count
-                        
-                        # Emit the new turn to all viewers
-                        socketio_instance.emit('new_turn', {
-                            'conversation_id': conversation_id,
-                            'turn': turn_data
-                        }, room=f'live_{conversation_id}')
+                    conversation['turns'].append(turn_data)
+                    conversation['current_turn'] = turn_count
+                    
+                    # Emit the new turn to all viewers
+                    socketio_instance.emit('new_turn', {
+                        'conversation_id': conversation_id,
+                        'turn': turn_data
+                    }, room=f'live_{conversation_id}')
+                    
+                    # Switch to next model for next turn
+                    manager.current_model_index = (manager.current_model_index + 1) % len(manager.models)
+                    
+                    # Update prompt for next turn (use the response as context)
+                    current_prompt = response
                     
                     # Small delay between turns for better UX
-                    import time
-                    time.sleep(2)
+                    time_module.sleep(2)
                     
                 except Exception as e:
                     print(f"Error in conversation turn: {e}")
+                    import traceback
+                    traceback.print_exc()
                     break
             
             # Mark conversation as completed
