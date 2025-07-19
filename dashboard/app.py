@@ -11,7 +11,8 @@ from datetime import datetime
 
 # Import our database models
 import sys
-sys.path.append('..')
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from database_models import (
     db, init_database, create_tables,
     Conversation, Turn, QualityMetric,
@@ -33,7 +34,10 @@ def create_app():
     
     # Configuration
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///conversations.db')
+    # Use absolute path for database
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    db_path = os.path.join(project_root, 'instance', 'conversations.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     # Initialize database
@@ -114,10 +118,13 @@ def create_app():
     @app.route('/templates')
     def templates():
         """Templates management page."""
-        from template_manager import TemplateManager
-        template_manager = TemplateManager()
-        return render_template('templates.html', 
-                             templates=template_manager.templates)
+        try:
+            from template_manager import TemplateManager
+            template_manager = TemplateManager()
+            return render_template('templates.html', 
+                                 templates=template_manager.templates)
+        except Exception as e:
+            return render_template('error.html', error=f"Template manager error: {str(e)}"), 500
     
     # WebSocket events
     @socketio.on('connect')
@@ -189,4 +196,4 @@ if __name__ == '__main__':
     print(f"Starting Flask dashboard on port {port}")
     print(f"Debug mode: {debug}")
     
-    socketio.run(app, host='0.0.0.0', port=port, debug=debug)
+    socketio.run(app, host='0.0.0.0', port=port, debug=debug, allow_unsafe_werkzeug=True)

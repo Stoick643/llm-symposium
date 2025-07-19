@@ -124,7 +124,12 @@
                         <div class="flex items-center justify-between">
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm font-medium text-blue-600 truncate">
-                                    {{ conversation.model_1 }} vs {{ conversation.model_2 }}
+                                    {% set models = conversation.get_models() %}
+                                    {% if models|length <= 3 %}
+                                        {{ models|join(' vs ') }}
+                                    {% else %}
+                                        {{ models[0] }} vs {{ models[1] }} (+{{ models|length - 2 }} more)
+                                    {% endif %}
                                 </p>
                                 <p class="mt-1 text-sm text-gray-900">
                                     {{ conversation.initial_prompt[:100] }}{% if conversation.initial_prompt|length > 100 %}...{% endif %}

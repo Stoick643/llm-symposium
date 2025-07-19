@@ -22,7 +22,12 @@
         
         <div class="mt-4">
             <h1 class="text-3xl font-bold text-gray-900">
-                {{ conversation.model_1 }} vs {{ conversation.model_2 }}
+                {% set models = conversation.get_models() %}
+                {% if models|length <= 3 %}
+                    {{ models|join(' vs ') }}
+                {% else %}
+                    {{ models[0] }} vs {{ models[1] }} (+{{ models|length - 2 }} more)
+                {% endif %}
             </h1>
             <p class="mt-2 text-gray-600">{{ conversation.initial_prompt }}</p>
         </div>
@@ -121,16 +126,23 @@
             <div class="px-4 py-5 sm:px-6 {% if loop.index % 2 == 0 %}bg-gray-50{% else %}bg-white{% endif %}">
                 <div class="flex items-start space-x-4">
                     <div class="flex-shrink-0">
-                        <div class="w-10 h-10 rounded-full {% if turn.speaker == conversation.model_1 %}bg-blue-500{% else %}bg-green-500{% endif %} flex items-center justify-center">
+                        {% set models = conversation.get_models() %}
+                        {% set speaker_index = models.index(turn.speaker) if turn.speaker in models else 0 %}
+                        {% set colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500'] %}
+                        {% set letters = ['A', 'B', 'C', 'D', 'E'] %}
+                        <div class="w-10 h-10 rounded-full {{ colors[speaker_index % colors|length] }} flex items-center justify-center">
                             <span class="text-white font-medium text-sm">
-                                {% if turn.speaker == conversation.model_1 %}A{% else %}B{% endif %}
+                                {{ letters[speaker_index % letters|length] }}
                             </span>
                         </div>
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center justify-between">
                             <h4 class="text-sm font-medium text-gray-900">
-                                {% if turn.speaker == conversation.model_1 %}Model A{% else %}Model B{% endif %}
+                                {% set models = conversation.get_models() %}
+                                {% set speaker_index = models.index(turn.speaker) if turn.speaker in models else 0 %}
+                                {% set letters = ['A', 'B', 'C', 'D', 'E'] %}
+                                Model {{ letters[speaker_index % letters|length] }}
                                 <span class="text-gray-500 font-normal">({{ turn.speaker }})</span>
                             </h4>
                             <div class="flex items-center text-sm text-gray-500">

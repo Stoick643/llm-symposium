@@ -242,8 +242,8 @@ def get_database_stats():
         'avg_turns_per_conversation': db.session.query(db.func.avg(Conversation.total_turns)).scalar() or 0,
         'avg_cost_per_conversation': db.session.query(db.func.avg(Conversation.total_cost)).scalar() or 0,
         'templates_used': db.session.query(Conversation.template).distinct().count(),
-        'models_used': db.session.query(
-            db.func.count(db.distinct(Conversation.model_1)) + 
-            db.func.count(db.distinct(Conversation.model_2))
-        ).scalar() or 0
+        'models_used': len(set([
+            model for conv in Conversation.query.all() 
+            for model in conv.get_models()
+        ]))
     }
