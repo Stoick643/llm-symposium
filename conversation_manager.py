@@ -178,8 +178,8 @@ Feel free to innovate in how you communicate, while keeping the conversation mea
         elif provider == Provider.MOONSHOT:
             return self._call_openai_compatible_model(model, messages, self.moonshot_client)
         else:
-            # Unknown model - try Anthropic as default
-            return self._call_anthropic_model(model, messages)
+            # Unknown model - return error instead of defaulting to Anthropic
+            return f"Error: Unknown model '{model}' - no provider configured", 0, 0, 0.0
     
     def _build_full_context(self, current_model: str) -> List[Dict]:
         """Build full conversation context for a model."""

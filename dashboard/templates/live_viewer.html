@@ -28,52 +28,88 @@
         </div>
     </div>
 
-    <!-- Conversation Stream -->
+    <!-- Two-Column Conversation Stream -->
     <div class="bg-white rounded-lg shadow-lg overflow-hidden">
         <div class="bg-gray-50 px-6 py-3 border-b border-gray-200">
             <div class="flex items-center justify-between">
-                <h2 class="text-lg font-semibold text-gray-900">Live Conversation</h2>
+                <h2 class="text-lg font-semibold text-gray-900">Live AI Conversation</h2>
                 <div id="turn-counter" class="text-sm text-gray-600">
                     Turn <span id="current-turn">{{ conversation.current_turn }}</span>
                 </div>
             </div>
         </div>
         
-        <div id="conversation-stream" class="h-96 overflow-y-auto bg-white">
-            <!-- Conversation turns will be added here -->
-            <div id="conversation-content" class="p-6 space-y-4">
-                {% if conversation.turns %}
-                    {% for turn in conversation.turns %}
-                    <div class="turn-message flex space-x-3" data-turn="{{ turn.turn_number }}">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
-                                {{ turn.speaker[0:2] }}
-                            </div>
+        <!-- Two-Column Layout -->
+        <div class="flex h-96">
+            <!-- Model 1 Column (Left) -->
+            <div class="flex-1 border-r border-gray-200">
+                <div class="bg-blue-50 px-4 py-2 border-b border-gray-200">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-semibold">
+                            {{ conversation.models[0][0:2].upper() }}
                         </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center space-x-2 mb-1">
-                                <h4 class="text-sm font-semibold text-gray-900">{{ turn.speaker }}</h4>
-                                <span class="text-xs text-gray-500">{{ turn.timestamp }}</span>
-                            </div>
-                            <div class="text-sm text-gray-700 prose prose-sm max-w-none">
-                                {{ turn.message }}
-                            </div>
-                        </div>
+                        <h3 class="text-sm font-semibold text-blue-700" id="model1-name">{{ conversation.models[0] }}</h3>
                     </div>
-                    {% endfor %}
-                {% else %}
-                <div id="waiting-message" class="text-center py-12">
-                    <div class="text-4xl mb-4">⏳</div>
-                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Waiting for conversation to start...</h3>
-                    <p class="text-gray-600">The AI models will begin their discussion shortly.</p>
                 </div>
-                {% endif %}
+                <div id="model1-messages" class="h-full overflow-y-auto p-4 space-y-3">
+                    <!-- Model 1 messages will be added here -->
+                    {% if conversation.turns %}
+                        {% for turn in conversation.turns %}
+                            {% if turn.speaker == conversation.models[0] %}
+                            <div class="chat-bubble-left" data-turn="{{ turn.turn_number }}">
+                                <div class="bg-blue-500 text-white rounded-lg px-4 py-2 max-w-2xl ml-auto">
+                                    <div class="text-xs opacity-75 mb-1">{{ turn.timestamp }}</div>
+                                    <div class="text-sm chat-content">{{ turn.message }}</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Model 2 Column (Right) -->
+            <div class="flex-1">
+                <div class="bg-green-50 px-4 py-2 border-b border-gray-200">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-semibold">
+                            {{ conversation.models[1][0:2].upper() if conversation.models|length > 1 else 'AI' }}
+                        </div>
+                        <h3 class="text-sm font-semibold text-green-700" id="model2-name">{{ conversation.models[1] if conversation.models|length > 1 else 'AI Model 2' }}</h3>
+                    </div>
+                </div>
+                <div id="model2-messages" class="h-full overflow-y-auto p-4 space-y-3">
+                    <!-- Model 2 messages will be added here -->
+                    {% if conversation.turns %}
+                        {% for turn in conversation.turns %}
+                            {% if turn.speaker != conversation.models[0] %}
+                            <div class="chat-bubble-right" data-turn="{{ turn.turn_number }}">
+                                <div class="bg-green-500 text-white rounded-lg px-4 py-2 max-w-2xl">
+                                    <div class="text-xs opacity-75 mb-1">{{ turn.timestamp }}</div>
+                                    <div class="text-sm chat-content">{{ turn.message }}</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </div>
             </div>
         </div>
         
+        <!-- Waiting Message (shown when no conversation started) -->
+        {% if not conversation.turns %}
+        <div id="waiting-message" class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90">
+            <div class="text-center">
+                <div class="text-4xl mb-4">⏳</div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Waiting for conversation to start...</h3>
+                <p class="text-gray-600">The AI models will begin their discussion shortly.</p>
+            </div>
+        </div>
+        {% endif %}
+        
         <!-- Typing Indicator -->
         <div id="typing-indicator" class="hidden bg-gray-50 px-6 py-3 border-t border-gray-200">
-            <div class="flex items-center space-x-2 text-sm text-gray-600">
+            <div class="flex items-center justify-center space-x-2 text-sm text-gray-600">
                 <div class="flex space-x-1">
                     <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                     <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s;"></div>
@@ -99,22 +135,21 @@
     </div>
 </div>
 
-<!-- Turn Message Template -->
-<template id="turn-template">
-    <div class="turn-message flex space-x-3 opacity-0 transform translate-y-4 transition-all duration-500" data-turn="">
-        <div class="flex-shrink-0">
-            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold speaker-avatar">
-                AI
-            </div>
+<!-- Chat Bubble Templates -->
+<template id="model1-bubble-template">
+    <div class="chat-bubble-left opacity-0 transform translate-y-4 transition-all duration-500" data-turn="">
+        <div class="bg-blue-500 text-white rounded-lg px-4 py-2 max-w-2xl ml-auto shadow-md">
+            <div class="text-xs opacity-75 mb-1 turn-timestamp">Just now</div>
+            <div class="text-sm turn-content chat-content">Message content...</div>
         </div>
-        <div class="flex-1 min-w-0">
-            <div class="flex items-center space-x-2 mb-1">
-                <h4 class="text-sm font-semibold text-gray-900 speaker-name">AI Model</h4>
-                <span class="text-xs text-gray-500 turn-timestamp">Just now</span>
-            </div>
-            <div class="text-sm text-gray-700 prose prose-sm max-w-none turn-content">
-                Message content...
-            </div>
+    </div>
+</template>
+
+<template id="model2-bubble-template">
+    <div class="chat-bubble-right opacity-0 transform translate-y-4 transition-all duration-500" data-turn="">
+        <div class="bg-green-500 text-white rounded-lg px-4 py-2 max-w-2xl shadow-md">
+            <div class="text-xs opacity-75 mb-1 turn-timestamp">Just now</div>
+            <div class="text-sm turn-content chat-content">Message content...</div>
         </div>
     </div>
 </template>
@@ -130,11 +165,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const statusText = document.getElementById('status-text');
     const viewerCountNumber = document.getElementById('viewer-count-number');
     const currentTurnSpan = document.getElementById('current-turn');
-    const conversationContent = document.getElementById('conversation-content');
-    const conversationStream = document.getElementById('conversation-stream');
+    const model1Messages = document.getElementById('model1-messages');
+    const model2Messages = document.getElementById('model2-messages');
     const typingIndicator = document.getElementById('typing-indicator');
     const waitingMessage = document.getElementById('waiting-message');
-    const turnTemplate = document.getElementById('turn-template');
+    const model1Template = document.getElementById('model1-bubble-template');
+    const model2Template = document.getElementById('model2-bubble-template');
+    
+    // Get model names for routing messages
+    const models = {{ conversation.models|tojson }};
     
     let currentStatus = '{{ conversation.status }}';
     let turnCount = {{ conversation.current_turn }};
@@ -222,31 +261,39 @@ document.addEventListener('DOMContentLoaded', function() {
             waitingMessage.style.display = 'none';
         }
         
-        // Clone template
-        const turnElement = turnTemplate.content.cloneNode(true);
+        // Determine which column this message belongs to
+        const isModel1 = turnData.speaker === models[0];
+        const template = isModel1 ? model1Template : model2Template;
+        const container = isModel1 ? model1Messages : model2Messages;
+        
+        // Clone appropriate template
+        const bubble = template.content.cloneNode(true);
         
         // Fill in data
-        turnElement.querySelector('.turn-message').setAttribute('data-turn', turnData.turn_number);
-        turnElement.querySelector('.speaker-avatar').textContent = turnData.speaker.substring(0, 2).toUpperCase();
-        turnElement.querySelector('.speaker-name').textContent = turnData.speaker;
-        turnElement.querySelector('.turn-timestamp').textContent = formatTimestamp(turnData.timestamp);
-        turnElement.querySelector('.turn-content').textContent = turnData.message;
+        bubble.querySelector('.chat-bubble-left, .chat-bubble-right').setAttribute('data-turn', turnData.turn_number);
+        bubble.querySelector('.turn-timestamp').textContent = formatTimestamp(turnData.timestamp);
         
-        // Add to conversation
-        conversationContent.appendChild(turnElement);
+        // Process markdown and sanitize HTML
+        const markdownHtml = marked.parse(turnData.message);
+        const sanitizedHtml = DOMPurify.sanitize(markdownHtml);
+        bubble.querySelector('.turn-content').innerHTML = sanitizedHtml;
+        
+        // Add to appropriate column
+        container.appendChild(bubble);
         
         // Animate in
         setTimeout(() => {
-            const newTurn = conversationContent.lastElementChild;
-            newTurn.classList.remove('opacity-0', 'translate-y-4');
+            const newBubble = container.lastElementChild;
+            newBubble.classList.remove('opacity-0', 'translate-y-4');
         }, 100);
         
         // Update turn counter
         turnCount = turnData.turn_number;
         currentTurnSpan.textContent = turnCount;
         
-        // Scroll to bottom
-        conversationStream.scrollTop = conversationStream.scrollHeight;
+        // Scroll both columns to bottom
+        model1Messages.scrollTop = model1Messages.scrollHeight;
+        model2Messages.scrollTop = model2Messages.scrollHeight;
         
         // Flash typing indicator briefly
         showTypingIndicator();

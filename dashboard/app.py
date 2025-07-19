@@ -281,7 +281,7 @@ def create_app():
         try:
             data = request.get_json() or {}
             template = data.get('template', 'debate')
-            models = data.get('models', ['claude-3-sonnet-20240229', 'gpt-4'])
+            models = data.get('models', ['gpt-4', 'deepseek-chat'])
             topic = data.get('topic', 'General AI Discussion')
             
             # Create a unique conversation ID
@@ -463,13 +463,23 @@ def create_app():
             )
             
             # Get API keys from environment
-            api_key = os.environ.get('ANTHROPIC_API_KEY')
+            api_key = os.environ.get('ANTHROPIC_API_KEY', 'dummy')  # Fallback since not using Claude
             openai_api_key = os.environ.get('OPENAI_API_KEY')
             deepseek_api_key = os.environ.get('DEEPSEEK_API_KEY')
             moonshot_api_key = os.environ.get('MOONSHOT_API_KEY')
             
-            if not api_key:
-                raise Exception("ANTHROPIC_API_KEY environment variable not set")
+            # Check if we have at least one API key for the models we're using
+            has_required_keys = False
+            for model in conversation['models']:
+                if model.startswith('gpt-') and openai_api_key:
+                    has_required_keys = True
+                elif model.startswith('deepseek-') and deepseek_api_key:
+                    has_required_keys = True
+                elif model.startswith('moonshot-') and moonshot_api_key:
+                    has_required_keys = True
+            
+            if not has_required_keys:
+                raise Exception("No API keys available for the selected models")
             
             # Create conversation manager
             manager = LLMConversation(
