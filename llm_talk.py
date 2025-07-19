@@ -218,6 +218,11 @@ def parse_args():
                        action='store_true', 
                        help='Enable conversation quality analysis with embeddings')
     
+    # Database options
+    parser.add_argument('--save-to-db', 
+                       action='store_true', 
+                       help='Save conversation to SQLite database')
+    
     # Template selection
     parser.add_argument('--template', 
                        choices=['debate', 'collaboration', 'socratic', 'creative', 'technical', 'learning'], 
@@ -357,7 +362,8 @@ def main():
             api_key=anthropic_key,
             openai_api_key=openai_key,
             deepseek_api_key=deepseek_key,
-            moonshot_api_key=moonshot_key
+            moonshot_api_key=moonshot_key,
+            save_to_db=args.save_to_db
         )
         
         metrics = conversation.start_conversation(

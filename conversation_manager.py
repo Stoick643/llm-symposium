@@ -14,6 +14,7 @@ from typing import List, Dict, Optional
 from models import ConversationTurn, ConversationMetrics, model_manager, Provider
 from template_manager import TemplateManager
 from config_manager import ConversationConfig
+from database_service import create_conversation, save_turn, update_metrics
 
 
 class LLMConversation:
@@ -23,7 +24,8 @@ class LLMConversation:
                  api_key: str,
                  openai_api_key: Optional[str] = None,
                  deepseek_api_key: Optional[str] = None,
-                 moonshot_api_key: Optional[str] = None):
+                 moonshot_api_key: Optional[str] = None,
+                 save_to_db: bool = False):
         """
         Initialize the conversation between multiple LLM models.
         
@@ -50,6 +52,10 @@ class LLMConversation:
         self.models = config.models
         self.current_model_index = 0
         self.conversation_history: List[ConversationTurn] = []
+        
+        # Database integration
+        self.save_to_db = save_to_db
+        self.conversation_id = None
         
         # Template management
         self.template_manager = TemplateManager()
@@ -239,6 +245,17 @@ Feel free to innovate in how you communicate, while keeping the conversation mea
             print(f"Quality Metrics: Enabled (using embeddings)")
         print("-" * 60)
         
+        # Create database conversation if enabled
+        if self.save_to_db:
+            self.conversation_id = create_conversation(
+                models=self.models,
+                initial_prompt=initial_prompt,
+                mode=self.config.mode,
+                window_size=self.config.window_size,
+                template=self.config.template,
+                ai_aware_mode=self.config.ai_aware_mode
+            )
+        
         # Generate unique conversation ID for database tracking
         conversation_id = f"conv_{int(time.time())}_{hash(initial_prompt) % 10000}"
         
@@ -276,6 +293,19 @@ Feel free to innovate in how you communicate, while keeping the conversation mea
                 timestamp=time.time()
             )
             self.conversation_history.append(conversation_turn)
+            
+            # Save turn to database if enabled
+            if self.save_to_db and self.conversation_id:
+                save_turn(
+                    conversation_id=self.conversation_id,
+                    turn_number=turn + 1,
+                    speaker=current_model,
+                    message=response,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    response_time=response_time,
+                    context_size=len(context)
+                )
             
             # Analyze message quality if enabled (placeholder)
             if self.config.enable_quality_metrics and self.quality_analyzer:
@@ -322,6 +352,19 @@ Feel free to innovate in how you communicate, while keeping the conversation mea
             response_times=self.response_times,
             turns_completed=len(self.conversation_history)
         )
+        
+        # Update database metrics if enabled
+        if self.save_to_db and self.conversation_id:
+            avg_response_time = sum(self.response_times) / len(self.response_times) if self.response_times else 0
+            update_metrics(
+                conversation_id=self.conversation_id,
+                total_turns=len(self.conversation_history),
+                total_cost=total_cost,
+                total_input_tokens=self.total_input_tokens,
+                total_output_tokens=self.total_output_tokens,
+                avg_response_time=avg_response_time,
+                status="completed"
+            )
         
         if real_time_display:
             self._print_metrics_summary(metrics)
