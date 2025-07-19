@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+
+{% block title %}Live: {{ conversation.topic }} - LLM Symposium{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <!-- Header -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">🔴 {{ conversation.topic }}</h1>
+                <div class="mt-1 text-sm text-gray-600">
+                    <span class="capitalize">{{ conversation.template }}</span> • 
+                    {{ conversation.models|join(' vs ') }}
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div id="viewer-count" class="flex items-center space-x-1 text-sm text-gray-600">
+                    <span>👥</span>
+                    <span id="viewer-count-number">{{ conversation.viewers }}</span>
+                    <span>viewers</span>
+                </div>
+                <div id="status-indicator" class="flex items-center space-x-2">
+                    <span class="w-3 h-3 rounded-full bg-yellow-500" id="status-dot"></span>
+                    <span id="status-text" class="text-sm font-medium">{{ conversation.status|title }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conversation Stream -->
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div class="bg-gray-50 px-6 py-3 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-gray-900">Live Conversation</h2>
+                <div id="turn-counter" class="text-sm text-gray-600">
+                    Turn <span id="current-turn">{{ conversation.current_turn }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="conversation-stream" class="h-96 overflow-y-auto bg-white">
+            <!-- Conversation turns will be added here -->
+            <div id="conversation-content" class="p-6 space-y-4">
+                {% if conversation.turns %}
+                    {% for turn in conversation.turns %}
+                    <div class="turn-message flex space-x-3" data-turn="{{ turn.turn_number }}">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
+                                {{ turn.speaker[0:2] }}
+                            </div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center space-x-2 mb-1">
+                                <h4 class="text-sm font-semibold text-gray-900">{{ turn.speaker }}</h4>
+                                <span class="text-xs text-gray-500">{{ turn.timestamp }}</span>
+                            </div>
+                            <div class="text-sm text-gray-700 prose prose-sm max-w-none">
+                                {{ turn.message }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div id="waiting-message" class="text-center py-12">
+                    <div class="text-4xl mb-4">⏳</div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Waiting for conversation to start...</h3>
+                    <p class="text-gray-600">The AI models will begin their discussion shortly.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Typing Indicator -->
+        <div id="typing-indicator" class="hidden bg-gray-50 px-6 py-3 border-t border-gray-200">
+            <div class="flex items-center space-x-2 text-sm text-gray-600">
+                <div class="flex space-x-1">
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s;"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s;"></div>
+                </div>
+                <span id="typing-speaker">AI</span>
+                <span>is thinking...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="mt-6 flex justify-center space-x-4">
+        <button id="start-btn" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500">
+            ▶️ Start Conversation
+        </button>
+        <button id="stop-btn" class="bg-red-600 text-white px-6 py-2 rounded-md hover:bg-red-700 focus:ring-2 focus:ring-red-500 hidden">
+            ⏹️ Stop Conversation
+        </button>
+        <a href="{{ url_for('live_conversations_page') }}" class="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700">
+            ← Back to Live Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Turn Message Template -->
+<template id="turn-template">
+    <div class="turn-message flex space-x-3 opacity-0 transform translate-y-4 transition-all duration-500" data-turn="">
+        <div class="flex-shrink-0">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold speaker-avatar">
+                AI
+            </div>
+        </div>
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center space-x-2 mb-1">
+                <h4 class="text-sm font-semibold text-gray-900 speaker-name">AI Model</h4>
+                <span class="text-xs text-gray-500 turn-timestamp">Just now</span>
+            </div>
+            <div class="text-sm text-gray-700 prose prose-sm max-w-none turn-content">
+                Message content...
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const conversationId = '{{ conversation_id }}';
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const viewerCountNumber = document.getElementById('viewer-count-number');
+    const currentTurnSpan = document.getElementById('current-turn');
+    const conversationContent = document.getElementById('conversation-content');
+    const conversationStream = document.getElementById('conversation-stream');
+    const typingIndicator = document.getElementById('typing-indicator');
+    const waitingMessage = document.getElementById('waiting-message');
+    const turnTemplate = document.getElementById('turn-template');
+    
+    let currentStatus = '{{ conversation.status }}';
+    let turnCount = {{ conversation.current_turn }};
+    
+    // Join the live conversation room
+    socket.emit('join_live_conversation', { conversation_id: conversationId });
+    
+    // Update UI based on current status
+    updateStatusDisplay();
+    
+    // Button event handlers
+    startBtn.addEventListener('click', startConversation);
+    stopBtn.addEventListener('click', stopConversation);
+    
+    // Start conversation
+    async function startConversation() {
+        try {
+            const response = await fetch(`/api/conversations/live/${conversationId}/start`, {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showMessage('Conversation started!', 'success');
+            } else {
+                showMessage('Failed to start: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showMessage('Error starting conversation: ' + error.message, 'error');
+        }
+    }
+    
+    // Stop conversation
+    async function stopConversation() {
+        try {
+            const response = await fetch(`/api/conversations/live/${conversationId}/stop`, {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showMessage('Conversation stopped!', 'success');
+            } else {
+                showMessage('Failed to stop: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showMessage('Error stopping conversation: ' + error.message, 'error');
+        }
+    }
+    
+    // Update status display
+    function updateStatusDisplay() {
+        const statusColors = {
+            'ready': 'bg-yellow-500',
+            'running': 'bg-green-500',
+            'stopped': 'bg-red-500',
+            'completed': 'bg-gray-500',
+            'error': 'bg-red-600'
+        };
+        
+        statusDot.className = `w-3 h-3 rounded-full ${statusColors[currentStatus] || 'bg-gray-500'}`;
+        statusText.textContent = currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1);
+        
+        // Show/hide buttons based on status
+        if (currentStatus === 'ready') {
+            startBtn.classList.remove('hidden');
+            stopBtn.classList.add('hidden');
+        } else if (currentStatus === 'running') {
+            startBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
+            showTypingIndicator();
+        } else {
+            startBtn.classList.add('hidden');
+            stopBtn.classList.add('hidden');
+            hideTypingIndicator();
+        }
+    }
+    
+    // Add new turn to conversation
+    function addTurn(turnData) {
+        // Hide waiting message if visible
+        if (waitingMessage) {
+            waitingMessage.style.display = 'none';
+        }
+        
+        // Clone template
+        const turnElement = turnTemplate.content.cloneNode(true);
+        
+        // Fill in data
+        turnElement.querySelector('.turn-message').setAttribute('data-turn', turnData.turn_number);
+        turnElement.querySelector('.speaker-avatar').textContent = turnData.speaker.substring(0, 2).toUpperCase();
+        turnElement.querySelector('.speaker-name').textContent = turnData.speaker;
+        turnElement.querySelector('.turn-timestamp').textContent = formatTimestamp(turnData.timestamp);
+        turnElement.querySelector('.turn-content').textContent = turnData.message;
+        
+        // Add to conversation
+        conversationContent.appendChild(turnElement);
+        
+        // Animate in
+        setTimeout(() => {
+            const newTurn = conversationContent.lastElementChild;
+            newTurn.classList.remove('opacity-0', 'translate-y-4');
+        }, 100);
+        
+        // Update turn counter
+        turnCount = turnData.turn_number;
+        currentTurnSpan.textContent = turnCount;
+        
+        // Scroll to bottom
+        conversationStream.scrollTop = conversationStream.scrollHeight;
+        
+        // Flash typing indicator briefly
+        showTypingIndicator();
+        setTimeout(hideTypingIndicator, 1500);
+    }
+    
+    // Show typing indicator
+    function showTypingIndicator() {
+        if (currentStatus === 'running') {
+            typingIndicator.classList.remove('hidden');
+        }
+    }
+    
+    // Hide typing indicator
+    function hideTypingIndicator() {
+        typingIndicator.classList.add('hidden');
+    }
+    
+    // Format timestamp
+    function formatTimestamp(timestamp) {
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString();
+    }
+    
+    // Show message to user
+    function showMessage(message, type) {
+        const messageEl = document.createElement('div');
+        messageEl.className = `fixed top-4 right-4 px-4 py-2 rounded-md z-50 ${
+            type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+        }`;
+        messageEl.textContent = message;
+        
+        document.body.appendChild(messageEl);
+        
+        setTimeout(() => {
+            document.body.removeChild(messageEl);
+        }, 3000);
+    }
+    
+    // WebSocket event handlers
+    socket.on('conversation_started', function(data) {
+        if (data.conversation_id === conversationId) {
+            currentStatus = 'running';
+            updateStatusDisplay();
+            showMessage('Conversation started!', 'success');
+        }
+    });
+    
+    socket.on('conversation_stopped', function(data) {
+        if (data.conversation_id === conversationId) {
+            currentStatus = 'stopped';
+            updateStatusDisplay();
+            showMessage('Conversation stopped!', 'info');
+        }
+    });
+    
+    socket.on('conversation_completed', function(data) {
+        if (data.conversation_id === conversationId) {
+            currentStatus = 'completed';
+            updateStatusDisplay();
+            showMessage(`Conversation completed! ${data.total_turns} turns total.`, 'success');
+        }
+    });
+    
+    socket.on('conversation_error', function(data) {
+        if (data.conversation_id === conversationId) {
+            currentStatus = 'error';
+            updateStatusDisplay();
+            showMessage('Conversation error: ' + data.error, 'error');
+        }
+    });
+    
+    socket.on('new_turn', function(data) {
+        if (data.conversation_id === conversationId) {
+            addTurn(data.turn);
+        }
+    });
+    
+    socket.on('viewer_count_update', function(data) {
+        if (data.conversation_id === conversationId) {
+            viewerCountNumber.textContent = data.viewers;
+        }
+    });
+    
+    // Leave room when page unloads
+    window.addEventListener('beforeunload', function() {
+        socket.emit('leave_live_conversation', { conversation_id: conversationId });
+    });
+});
+</script>
+{% endblock %}

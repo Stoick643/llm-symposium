@@ -151,6 +151,47 @@ def create_app():
             join_room(f'conversation_{conversation_id}')
             emit('status', {'message': f'Joined conversation {conversation_id}'})
     
+    @socketio.on('join_live_conversation')
+    def handle_join_live_conversation(data):
+        """Join a live conversation room for real-time updates."""
+        conversation_id = data.get('conversation_id')
+        if conversation_id:
+            from flask_socketio import join_room
+            join_room(f'live_{conversation_id}')
+            
+            # Update viewer count
+            if conversation_id in live_conversations:
+                live_conversations[conversation_id]['viewers'] += 1
+                
+                # Emit viewer count update to all viewers
+                socketio.emit('viewer_count_update', {
+                    'conversation_id': conversation_id,
+                    'viewers': live_conversations[conversation_id]['viewers']
+                }, room=f'live_{conversation_id}')
+            
+            emit('status', {'message': f'Joined live conversation {conversation_id}'})
+    
+    @socketio.on('leave_live_conversation')
+    def handle_leave_live_conversation(data):
+        """Leave a live conversation room."""
+        conversation_id = data.get('conversation_id')
+        if conversation_id:
+            from flask_socketio import leave_room
+            leave_room(f'live_{conversation_id}')
+            
+            # Update viewer count
+            if conversation_id in live_conversations:
+                live_conversations[conversation_id]['viewers'] = max(0, 
+                    live_conversations[conversation_id]['viewers'] - 1)
+                
+                # Emit viewer count update to all viewers
+                socketio.emit('viewer_count_update', {
+                    'conversation_id': conversation_id,
+                    'viewers': live_conversations[conversation_id]['viewers']
+                }, room=f'live_{conversation_id}')
+            
+            emit('status', {'message': f'Left live conversation {conversation_id}'})
+    
     # TTS API endpoints
     @app.route('/api/generate-tts/<int:turn_id>', methods=['POST'])
     def generate_tts_for_turn(turn_id):
@@ -231,6 +272,139 @@ def create_app():
             print(traceback.format_exc())
             return jsonify({'error': f'Audio serving failed: {str(e)}'}), 500
     
+    # Live conversation API endpoints
+    live_conversations = {}  # Store active live conversations
+    
+    @app.route('/api/conversations/live', methods=['POST'])
+    def start_live_conversation():
+        """Start a new live conversation."""
+        try:
+            data = request.get_json() or {}
+            template = data.get('template', 'debate')
+            models = data.get('models', ['claude-3-sonnet-20240229', 'gpt-4'])
+            topic = data.get('topic', 'General AI Discussion')
+            
+            # Create a unique conversation ID
+            import uuid
+            conversation_id = str(uuid.uuid4())
+            
+            # Store conversation metadata
+            live_conversations[conversation_id] = {
+                'id': conversation_id,
+                'template': template,
+                'models': models,
+                'topic': topic,
+                'status': 'ready',
+                'viewers': 0,
+                'created_at': datetime.utcnow().isoformat(),
+                'current_turn': 0,
+                'turns': []
+            }
+            
+            return jsonify({
+                'success': True,
+                'conversation_id': conversation_id,
+                'conversation': live_conversations[conversation_id]
+            })
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/conversations/live/<conversation_id>/start', methods=['POST'])
+    def start_live_conversation_stream(conversation_id):
+        """Start streaming a live conversation."""
+        try:
+            if conversation_id not in live_conversations:
+                return jsonify({'error': 'Conversation not found'}), 404
+            
+            conversation = live_conversations[conversation_id]
+            if conversation['status'] != 'ready':
+                return jsonify({'error': 'Conversation not ready to start'}), 400
+            
+            # Update status to running
+            conversation['status'] = 'running'
+            
+            # Emit to all viewers
+            socketio.emit('conversation_started', {
+                'conversation_id': conversation_id,
+                'conversation': conversation
+            }, room=f'live_{conversation_id}')
+            
+            # Start conversation in background thread
+            import threading
+            thread = threading.Thread(
+                target=_run_live_conversation, 
+                args=(conversation_id, socketio)
+            )
+            thread.daemon = True
+            thread.start()
+            
+            return jsonify({
+                'success': True,
+                'conversation_id': conversation_id,
+                'status': 'running'
+            })
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/conversations/live/<conversation_id>')
+    def get_live_conversation(conversation_id):
+        """Get live conversation status and data."""
+        if conversation_id not in live_conversations:
+            return jsonify({'error': 'Conversation not found'}), 404
+        
+        return jsonify({
+            'conversation': live_conversations[conversation_id]
+        })
+    
+    @app.route('/api/conversations/live')
+    def list_live_conversations():
+        """List all active live conversations."""
+        return jsonify({
+            'conversations': list(live_conversations.values())
+        })
+    
+    @app.route('/api/conversations/live/<conversation_id>/stop', methods=['POST'])
+    def stop_live_conversation(conversation_id):
+        """Stop a live conversation."""
+        try:
+            if conversation_id not in live_conversations:
+                return jsonify({'error': 'Conversation not found'}), 404
+            
+            conversation = live_conversations[conversation_id]
+            conversation['status'] = 'stopped'
+            
+            # Emit to all viewers
+            socketio.emit('conversation_stopped', {
+                'conversation_id': conversation_id
+            }, room=f'live_{conversation_id}')
+            
+            return jsonify({
+                'success': True,
+                'conversation_id': conversation_id,
+                'status': 'stopped'
+            })
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/live')
+    def live_conversations_page():
+        """Live conversations dashboard page."""
+        return render_template('live.html')
+    
+    @app.route('/live/<conversation_id>')
+    def live_conversation_viewer(conversation_id):
+        """Live conversation viewer page."""
+        if conversation_id not in live_conversations:
+            return "Live conversation not found", 404
+        
+        conversation = live_conversations[conversation_id]
+        return render_template('live_viewer.html', 
+                             conversation=conversation,
+                             conversation_id=conversation_id)
+    
     # Error handlers
     @app.errorhandler(404)
     def not_found(error):
@@ -262,6 +436,94 @@ def create_app():
         print(f"Average Cost per Conversation: ${stats['avg_cost_per_conversation']:.4f}")
         print(f"Templates Used: {stats['templates_used']}")
         print(f"Models Used: {stats['models_used']}")
+    
+    def _run_live_conversation(conversation_id, socketio_instance):
+        """Run a live conversation in the background."""
+        try:
+            if conversation_id not in live_conversations:
+                return
+            
+            conversation = live_conversations[conversation_id]
+            
+            # Import conversation manager
+            from conversation_manager import ConversationManager
+            
+            # Set up conversation configuration
+            config = {
+                'model1': conversation['models'][0],
+                'model2': conversation['models'][1] if len(conversation['models']) > 1 else conversation['models'][0],
+                'template': conversation['template'],
+                'ai_aware_mode': True,
+                'mode': 'full',
+                'max_turns': 10,  # Limit for live conversations
+                'save_to_db': True,
+                'enable_tts': False  # Disable TTS for live streaming to reduce latency
+            }
+            
+            # Create conversation manager
+            manager = ConversationManager(config)
+            
+            # Start conversation loop
+            turn_count = 0
+            while (conversation['status'] == 'running' and 
+                   turn_count < config['max_turns'] and 
+                   conversation_id in live_conversations):
+                
+                try:
+                    # Execute one turn
+                    success = manager.execute_turn()
+                    
+                    if not success:
+                        break
+                    
+                    turn_count += 1
+                    
+                    # Get the latest turn from the conversation
+                    latest_turn = manager.conversation_turns[-1] if manager.conversation_turns else None
+                    
+                    if latest_turn:
+                        # Update live conversation data
+                        turn_data = {
+                            'turn_number': turn_count,
+                            'speaker': latest_turn.get('speaker', 'Unknown'),
+                            'message': latest_turn.get('message', ''),
+                            'timestamp': datetime.utcnow().isoformat()
+                        }
+                        
+                        conversation['turns'].append(turn_data)
+                        conversation['current_turn'] = turn_count
+                        
+                        # Emit the new turn to all viewers
+                        socketio_instance.emit('new_turn', {
+                            'conversation_id': conversation_id,
+                            'turn': turn_data
+                        }, room=f'live_{conversation_id}')
+                    
+                    # Small delay between turns for better UX
+                    import time
+                    time.sleep(2)
+                    
+                except Exception as e:
+                    print(f"Error in conversation turn: {e}")
+                    break
+            
+            # Mark conversation as completed
+            conversation['status'] = 'completed'
+            
+            # Emit completion event
+            socketio_instance.emit('conversation_completed', {
+                'conversation_id': conversation_id,
+                'total_turns': turn_count
+            }, room=f'live_{conversation_id}')
+            
+        except Exception as e:
+            print(f"Error running live conversation {conversation_id}: {e}")
+            if conversation_id in live_conversations:
+                live_conversations[conversation_id]['status'] = 'error'
+                socketio_instance.emit('conversation_error', {
+                    'conversation_id': conversation_id,
+                    'error': str(e)
+                }, room=f'live_{conversation_id}')
     
     return app, socketio
 

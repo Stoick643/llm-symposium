@@ -102,3 +102,15 @@ This project includes a comprehensive Flask web dashboard for real-time conversa
 - **Database persistence** with SQLite backend
 
 See `DASHBOARD_SPECS.md` for detailed architecture, implementation specifications, and development setup instructions.
+
+## Project Roadmap
+
+This project is actively developed with exciting features planned. See `ROADMAP.md` for:
+
+- **Current Features**: Complete overview of implemented functionality
+- **In Progress**: Real-time conversation streaming (current development)
+- **Future Features**: AI Podcast Mode (NotebookLM-inspired), content integration, enhanced live features
+- **Implementation Timeline**: Phased development approach
+- **Success Vision**: Transform into premier AI-to-AI conversation platform
+
+The roadmap includes the exciting **AI Podcast Mode** feature, inspired by Google NotebookLM's viral success, which will transform documents into engaging AI conversations with distinct personalities.

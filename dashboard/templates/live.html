@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}Live Conversations - LLM Symposium{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">🔴 Live AI Conversations</h1>
+        <p class="mt-2 text-gray-600">Watch AI conversations unfold in real-time</p>
+    </div>
+
+    <!-- Create New Live Conversation -->
+    <div class="bg-white rounded-lg shadow mb-8">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">Start New Live Conversation</h2>
+        </div>
+        <div class="p-6">
+            <form id="new-conversation-form" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="template" class="block text-sm font-medium text-gray-700">Template</label>
+                        <select id="template" name="template" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="debate">Debate</option>
+                            <option value="collaboration">Collaboration</option>
+                            <option value="socratic">Socratic</option>
+                            <option value="creative">Creative</option>
+                            <option value="technical">Technical</option>
+                            <option value="learning">Learning</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="topic" class="block text-sm font-medium text-gray-700">Topic</label>
+                        <input type="text" id="topic" name="topic" placeholder="Enter conversation topic..." 
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="model1" class="block text-sm font-medium text-gray-700">AI Model 1</label>
+                        <select id="model1" name="model1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                            <option value="gpt-4">GPT-4</option>
+                            <option value="deepseek-chat">DeepSeek Chat</option>
+                            <option value="moonshot-v1-8k">Moonshot v1</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="model2" class="block text-sm font-medium text-gray-700">AI Model 2</label>
+                        <select id="model2" name="model2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="gpt-4">GPT-4</option>
+                            <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                            <option value="deepseek-chat">DeepSeek Chat</option>
+                            <option value="moonshot-v1-8k">Moonshot v1</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        Create Live Conversation
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Active Live Conversations -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">Active Live Conversations</h2>
+        </div>
+        <div id="live-conversations-list" class="p-6">
+            <div class="text-center text-gray-500 py-8">
+                <div class="text-4xl mb-4">🤖</div>
+                <p>No active live conversations</p>
+                <p class="text-sm">Create one above to get started!</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Live Conversation Card Template -->
+<template id="conversation-card-template">
+    <div class="border border-gray-200 rounded-lg p-4 mb-4 conversation-card">
+        <div class="flex justify-between items-start">
+            <div class="flex-1">
+                <div class="flex items-center space-x-2 mb-2">
+                    <span class="status-indicator w-3 h-3 rounded-full bg-green-500"></span>
+                    <h3 class="font-semibold text-gray-900 conversation-topic"></h3>
+                </div>
+                <div class="text-sm text-gray-600 mb-2">
+                    <span class="conversation-template"></span> • 
+                    <span class="conversation-models"></span>
+                </div>
+                <div class="flex items-center space-x-4 text-sm text-gray-500">
+                    <span class="conversation-viewers">👥 0 viewers</span>
+                    <span class="conversation-turns">💬 0 turns</span>
+                    <span class="conversation-status">Ready</span>
+                </div>
+            </div>
+            <div class="flex space-x-2">
+                <button class="start-btn bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+                    Start
+                </button>
+                <button class="stop-btn bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 hidden">
+                    Stop
+                </button>
+                <a href="#" class="watch-btn bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">
+                    Watch
+                </a>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const newConversationForm = document.getElementById('new-conversation-form');
+    const conversationsList = document.getElementById('live-conversations-list');
+    const template = document.getElementById('conversation-card-template');
+    
+    let liveConversations = {};
+    
+    // Load existing live conversations on page load
+    loadLiveConversations();
+    
+    // Handle new conversation form submission
+    newConversationForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+            template: formData.get('template'),
+            topic: formData.get('topic') || 'General AI Discussion',
+            models: [formData.get('model1'), formData.get('model2')]
+        };
+        
+        try {
+            const response = await fetch('/api/conversations/live', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Add new conversation to the list
+                liveConversations[result.conversation_id] = result.conversation;
+                updateConversationsList();
+                
+                // Reset form
+                newConversationForm.reset();
+                
+                // Show success message
+                showMessage('Live conversation created successfully!', 'success');
+            } else {
+                showMessage('Failed to create live conversation: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showMessage('Error creating live conversation: ' + error.message, 'error');
+        }
+    });
+    
+    // Load live conversations from API
+    async function loadLiveConversations() {
+        try {
+            const response = await fetch('/api/conversations/live');
+            const result = await response.json();
+            
+            liveConversations = {};
+            result.conversations.forEach(conv => {
+                liveConversations[conv.id] = conv;
+            });
+            
+            updateConversationsList();
+        } catch (error) {
+            console.error('Error loading live conversations:', error);
+        }
+    }
+    
+    // Update the conversations list display
+    function updateConversationsList() {
+        const conversations = Object.values(liveConversations);
+        
+        if (conversations.length === 0) {
+            conversationsList.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <div class="text-4xl mb-4">🤖</div>
+                    <p>No active live conversations</p>
+                    <p class="text-sm">Create one above to get started!</p>
+                </div>
+            `;
+            return;
+        }
+        
+        conversationsList.innerHTML = '';
+        
+        conversations.forEach(conversation => {
+            const card = createConversationCard(conversation);
+            conversationsList.appendChild(card);
+        });
+    }
+    
+    // Create a conversation card element
+    function createConversationCard(conversation) {
+        const card = template.content.cloneNode(true);
+        
+        // Fill in conversation data
+        card.querySelector('.conversation-topic').textContent = conversation.topic;
+        card.querySelector('.conversation-template').textContent = conversation.template;
+        card.querySelector('.conversation-models').textContent = conversation.models.join(' vs ');
+        card.querySelector('.conversation-viewers').textContent = `👥 ${conversation.viewers} viewers`;
+        card.querySelector('.conversation-turns').textContent = `💬 ${conversation.current_turn} turns`;
+        card.querySelector('.conversation-status').textContent = conversation.status;
+        
+        // Update status indicator
+        const statusIndicator = card.querySelector('.status-indicator');
+        const statusColors = {
+            'ready': 'bg-yellow-500',
+            'running': 'bg-green-500',
+            'stopped': 'bg-red-500',
+            'completed': 'bg-gray-500',
+            'error': 'bg-red-600'
+        };
+        statusIndicator.className = `status-indicator w-3 h-3 rounded-full ${statusColors[conversation.status] || 'bg-gray-500'}`;
+        
+        // Handle buttons
+        const startBtn = card.querySelector('.start-btn');
+        const stopBtn = card.querySelector('.stop-btn');
+        const watchBtn = card.querySelector('.watch-btn');
+        
+        // Set watch link
+        watchBtn.href = `/live/${conversation.id}`;
+        
+        // Show/hide buttons based on status
+        if (conversation.status === 'ready') {
+            startBtn.classList.remove('hidden');
+            stopBtn.classList.add('hidden');
+        } else if (conversation.status === 'running') {
+            startBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
+        } else {
+            startBtn.classList.add('hidden');
+            stopBtn.classList.add('hidden');
+        }
+        
+        // Add event listeners
+        startBtn.addEventListener('click', () => startConversation(conversation.id));
+        stopBtn.addEventListener('click', () => stopConversation(conversation.id));
+        
+        return card;
+    }
+    
+    // Start a conversation
+    async function startConversation(conversationId) {
+        try {
+            const response = await fetch(`/api/conversations/live/${conversationId}/start`, {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showMessage('Live conversation started!', 'success');
+                // The status will be updated via WebSocket
+            } else {
+                showMessage('Failed to start conversation: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showMessage('Error starting conversation: ' + error.message, 'error');
+        }
+    }
+    
+    // Stop a conversation
+    async function stopConversation(conversationId) {
+        try {
+            const response = await fetch(`/api/conversations/live/${conversationId}/stop`, {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showMessage('Live conversation stopped!', 'success');
+                // The status will be updated via WebSocket
+            } else {
+                showMessage('Failed to stop conversation: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showMessage('Error stopping conversation: ' + error.message, 'error');
+        }
+    }
+    
+    // Show message to user
+    function showMessage(message, type) {
+        // Create message element
+        const messageEl = document.createElement('div');
+        messageEl.className = `fixed top-4 right-4 px-4 py-2 rounded-md z-50 ${
+            type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+        }`;
+        messageEl.textContent = message;
+        
+        document.body.appendChild(messageEl);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            document.body.removeChild(messageEl);
+        }, 3000);
+    }
+    
+    // WebSocket event handlers for real-time updates
+    socket.on('conversation_started', function(data) {
+        if (liveConversations[data.conversation_id]) {
+            liveConversations[data.conversation_id] = data.conversation;
+            updateConversationsList();
+        }
+    });
+    
+    socket.on('conversation_stopped', function(data) {
+        if (liveConversations[data.conversation_id]) {
+            liveConversations[data.conversation_id].status = 'stopped';
+            updateConversationsList();
+        }
+    });
+    
+    socket.on('conversation_completed', function(data) {
+        if (liveConversations[data.conversation_id]) {
+            liveConversations[data.conversation_id].status = 'completed';
+            updateConversationsList();
+        }
+    });
+    
+    socket.on('viewer_count_update', function(data) {
+        if (liveConversations[data.conversation_id]) {
+            liveConversations[data.conversation_id].viewers = data.viewers;
+            updateConversationsList();
+        }
+    });
+    
+    // Refresh conversations list every 30 seconds
+    setInterval(loadLiveConversations, 30000);
+});
+</script>
+{% endblock %}
