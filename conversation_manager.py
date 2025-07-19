@@ -15,6 +15,8 @@ from models import ConversationTurn, ConversationMetrics, model_manager, Provide
 from template_manager import TemplateManager
 from config_manager import ConversationConfig
 from database_service import create_conversation, save_turn, update_metrics
+from tts_service import get_tts_service
+from audio_manager import get_audio_manager
 
 
 class LLMConversation:
@@ -219,7 +221,8 @@ Feel free to innovate in how you communicate, while keeping the conversation mea
     
     def start_conversation(self, initial_prompt: str, max_turns: int = 10, 
                           delay_between_turns: float = 0.5, 
-                          real_time_display: bool = True) -> ConversationMetrics:
+                          real_time_display: bool = True,
+                          tts_config: Optional[Dict] = None) -> ConversationMetrics:
         """
         Start a conversation between multiple models.
         
@@ -228,6 +231,7 @@ Feel free to innovate in how you communicate, while keeping the conversation mea
             max_turns: Maximum number of conversation turns
             delay_between_turns: Delay in seconds between API calls
             real_time_display: Whether to display conversation in real-time
+            tts_config: TTS configuration dict with keys: enabled, voice_override, auto_play
             
         Returns:
             ConversationMetrics object with detailed statistics
@@ -235,40 +239,26 @@ Feel free to innovate in how you communicate, while keeping the conversation mea
         self._display_conversation_header(initial_prompt, real_time_display)
         self._initialize_database_conversation(initial_prompt)
         
-        return self._run_conversation_loop(initial_prompt, max_turns, delay_between_turns, real_time_display)
+        return self._run_conversation_loop(initial_prompt, max_turns, delay_between_turns, real_time_display, tts_config)
     
-    def _display_conversation_header(self, initial_prompt: str, real_time_display: bool) -> None:
-        """Display conversation configuration information."""
-        if not real_time_display:
-            return
-            
-        print(f"Starting conversation with initial prompt: {initial_prompt}")
-        for i, model in enumerate(self.models, 1):
-            print(f"Model {i}: {model}")
-        print(f"Mode: {self.config.mode}")
-        if self.config.mode in ["sliding", "sliding_cache"]:
-            print(f"Window Size: {self.config.window_size}")
-        print(f"AI-Aware Mode: {self.config.ai_aware_mode}")
-        if self.config.template:
-            print(f"Template: {self.config.template} ({self.template_config['name']})")
-        if self.config.enable_quality_metrics:
-            print(f"Quality Metrics: Enabled (using embeddings)")
-        print("-" * 60)
-    
-    def _initialize_database_conversation(self, initial_prompt: str) -> None:
-        """Initialize database conversation if enabled."""
-        if self.save_to_db:
-            self.conversation_id = create_conversation(
-                models=self.models,
-                initial_prompt=initial_prompt,
-                mode=self.config.mode,
-                window_size=self.config.window_size,
-                template=self.config.template,
-                ai_aware_mode=self.config.ai_aware_mode
-            )
-        
-        # Generate unique conversation ID for database tracking
-        conversation_id = f"conv_{int(time.time())}_{hash(initial_prompt) % 10000}"
+    def _run_conversation_loop(self, initial_prompt: str, max_turns: int, 
+                              delay_between_turns: float, real_time_display: bool,
+                              tts_config: Optional[Dict] = None) -> ConversationMetrics:
+        """Run the main conversation loop between models."""
+        # Initialize TTS services if enabled
+        tts_service = None
+        audio_manager = None
+        if tts_config and tts_config.get("enabled"):
+            try:
+                tts_service = get_tts_service()
+                audio_manager = get_audio_manager()
+                if real_time_display:
+                    print(f"TTS initialized - Audio system: {audio_manager.get_system_info()['audio_player'] or 'Not available'}")
+            except Exception as e:
+                if real_time_display:
+                    print(f"TTS initialization failed: {e}")
+                tts_service = None
+                audio_manager = None
         
         # First model starts the conversation
         current_model = self.models[self.current_model_index]
@@ -329,6 +319,35 @@ Feel free to innovate in how you communicate, while keeping the conversation mea
                 if self.config.mode in ["sliding", "sliding_cache"]:
                     print(f"(Context size: {len(context)} messages)")
             
+            # Generate and play TTS if enabled
+            if tts_service and audio_manager:
+                try:
+                    # Determine voice to use
+                    voice = tts_config.get("voice_override") or None
+                    
+                    # Generate speech
+                    audio_file = tts_service.generate_speech(
+                        text=response,
+                        voice=voice,
+                        model_name=current_model
+                    )
+                    
+                    if real_time_display:
+                        print(f"🔊 Generated audio: {audio_file}")
+                    
+                    # Play audio if auto_play is enabled
+                    if tts_config.get("auto_play", True):
+                        if audio_manager.play_audio_file(audio_file, background=True):
+                            if real_time_display:
+                                print("🎵 Playing audio...")
+                        else:
+                            if real_time_display:
+                                print("❌ Audio playback failed")
+                    
+                except Exception as e:
+                    if real_time_display:
+                        print(f"TTS error: {e}")
+            
             # Switch to the next model (circular)
             self.current_model_index = (self.current_model_index + 1) % len(self.models)
             current_model = self.models[self.current_model_index]
@@ -381,6 +400,37 @@ Feel free to innovate in how you communicate, while keeping the conversation mea
             self._print_metrics_summary(metrics)
         
         return metrics
+    
+    def _display_conversation_header(self, initial_prompt: str, real_time_display: bool) -> None:
+        """Display conversation configuration information."""
+        if not real_time_display:
+            return
+            
+        print(f"Starting conversation with initial prompt: {initial_prompt}")
+        for i, model in enumerate(self.models, 1):
+            print(f"Model {i}: {model}")
+        print(f"Mode: {self.config.mode}")
+        if self.config.mode in ["sliding", "sliding_cache"]:
+            print(f"Window Size: {self.config.window_size}")
+        print(f"AI-Aware Mode: {self.config.ai_aware_mode}")
+        if self.config.template:
+            print(f"Template: {self.config.template} ({self.template_config['name']})")
+        if self.config.enable_quality_metrics:
+            print(f"Quality Metrics: Enabled (using embeddings)")
+        print("-" * 60)
+    
+    def _initialize_database_conversation(self, initial_prompt: str) -> None:
+        """Initialize database conversation if enabled."""
+        if self.save_to_db:
+            self.conversation_id = create_conversation(
+                models=self.models,
+                initial_prompt=initial_prompt,
+                mode=self.config.mode,
+                window_size=self.config.window_size,
+                template=self.config.template,
+                ai_aware_mode=self.config.ai_aware_mode
+            )
+        
     
     def _print_metrics_summary(self, metrics: ConversationMetrics):
         """Print a summary of conversation metrics."""

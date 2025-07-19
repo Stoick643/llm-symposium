@@ -241,6 +241,17 @@ def parse_args():
                        choices=['json', 'markdown', 'txt'], 
                        help='Output format for saved conversations (overrides config)')
     
+    # Text-to-Speech options
+    parser.add_argument('--enable-tts', 
+                       action='store_true', 
+                       help='Enable text-to-speech audio generation during conversation')
+    parser.add_argument('--tts-voice', 
+                       choices=['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'], 
+                       help='Voice to use for TTS (overrides model-specific voices)')
+    parser.add_argument('--no-audio-playback', 
+                       action='store_true', 
+                       help='Generate TTS files but don\'t play them automatically')
+    
     return parser.parse_args()
 
 
@@ -344,6 +355,19 @@ def main():
         print("Embeddings will be cached in embeddings/cache.db")
         print()
     
+    # Show TTS info if enabled
+    if args.enable_tts:
+        print("\nText-to-Speech: ENABLED")
+        if args.tts_voice:
+            print(f"Voice: {args.tts_voice} (overriding model-specific voices)")
+        else:
+            print("Voice: Model-specific voices (different voice per AI model)")
+        if args.no_audio_playback:
+            print("Audio playback: DISABLED (files will be generated only)")
+        else:
+            print("Audio playback: ENABLED")
+        print()
+    
     if args.compare:
         # Run comparison experiment
         results = run_comparison_experiment(
@@ -366,11 +390,21 @@ def main():
             save_to_db=args.save_to_db
         )
         
+        # Setup TTS if enabled
+        tts_config = None
+        if args.enable_tts:
+            tts_config = {
+                "enabled": True,
+                "voice_override": args.tts_voice,
+                "auto_play": not args.no_audio_playback
+            }
+        
         metrics = conversation.start_conversation(
             initial_prompt=prompt,
             max_turns=config.turns,
             delay_between_turns=config.delay_between_turns,
-            real_time_display=True
+            real_time_display=True,
+            tts_config=tts_config
         )
         
         # Print summary and save

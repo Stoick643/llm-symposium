@@ -151,15 +151,32 @@
                             </div>
                         </div>
                         <div class="mt-2 text-sm text-gray-900 whitespace-pre-wrap">{{ turn.message }}</div>
-                        <div class="mt-2 flex items-center text-xs text-gray-500">
-                            <span class="mr-4">{{ turn.input_tokens }} in</span>
-                            <span class="mr-4">{{ turn.output_tokens }} out</span>
-                            {% if turn.response_time %}
-                            <span class="mr-4">{{ "%.2f"|format(turn.response_time) }}s</span>
-                            {% endif %}
-                            {% if turn.context_size %}
-                            <span>{{ turn.context_size }} context</span>
-                            {% endif %}
+                        <div class="mt-2 flex items-center justify-between">
+                            <div class="flex items-center text-xs text-gray-500">
+                                <span class="mr-4">{{ turn.input_tokens }} in</span>
+                                <span class="mr-4">{{ turn.output_tokens }} out</span>
+                                {% if turn.response_time %}
+                                <span class="mr-4">{{ "%.2f"|format(turn.response_time) }}s</span>
+                                {% endif %}
+                                {% if turn.context_size %}
+                                <span>{{ turn.context_size }} context</span>
+                                {% endif %}
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="generateTTS({{ turn.id }}, '{{ turn.speaker }}')" 
+                                        class="inline-flex items-center px-2 py-1 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 14.142M9 9l-6 6 6 6v-4h6V9z"/>
+                                    </svg>
+                                    Generate Audio
+                                </button>
+                                <div id="audio-player-{{ turn.id }}" class="hidden">
+                                    <audio controls class="h-8">
+                                        <source id="audio-source-{{ turn.id }}" src="" type="audio/mpeg">
+                                        Your browser does not support the audio element.
+                                    </audio>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -183,5 +200,52 @@
             // TODO: Add turn to the UI
         }
     });
+    
+    // TTS functionality
+    async function generateTTS(turnId, speaker) {
+        const button = event.target.closest('button');
+        const originalText = button.innerHTML;
+        
+        // Show loading state
+        button.innerHTML = '<span class="animate-spin">⏳</span> Generating...';
+        button.disabled = true;
+        
+        try {
+            const response = await fetch(`/api/generate-tts/${turnId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ speaker: speaker })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Show audio player
+                const audioPlayer = document.getElementById(`audio-player-${turnId}`);
+                const audioSource = document.getElementById(`audio-source-${turnId}`);
+                
+                audioSource.src = `/api/audio/${data.audio_filename}`;
+                audioPlayer.classList.remove('hidden');
+                audioPlayer.querySelector('audio').load();
+                
+                // Update button
+                button.innerHTML = '🔊 Regenerate Audio';
+                button.disabled = false;
+                
+            } else {
+                const error = await response.json();
+                alert(`TTS Error: ${error.error}`);
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        } catch (error) {
+            console.error('TTS generation failed:', error);
+            alert('Failed to generate audio. Please try again.');
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
+    }
 </script>
 {% endblock %}

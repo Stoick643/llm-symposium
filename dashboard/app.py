@@ -8,6 +8,7 @@ import os
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_socketio import SocketIO, emit
 from datetime import datetime
+import tempfile
 
 # Import our database models
 import sys
@@ -20,6 +21,7 @@ from database_models import (
     get_conversations_by_template, search_conversations,
     get_conversation_turns, get_database_stats
 )
+from tts_service import get_tts_service
 
 try:
     from dotenv import load_dotenv
@@ -45,7 +47,7 @@ def create_app():
     init_database(app)
     
     # Initialize SocketIO with appropriate CORS settings
-    cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+    cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000,http://localhost:3000,http://127.0.0.1:3000').split(',')
     socketio = SocketIO(app, cors_allowed_origins=cors_origins)
     
     # Routes
@@ -148,6 +150,86 @@ def create_app():
             from flask_socketio import join_room
             join_room(f'conversation_{conversation_id}')
             emit('status', {'message': f'Joined conversation {conversation_id}'})
+    
+    # TTS API endpoints
+    @app.route('/api/generate-tts/<int:turn_id>', methods=['POST'])
+    def generate_tts_for_turn(turn_id):
+        """Generate TTS audio for a specific conversation turn."""
+        try:
+            # Get the turn from database
+            turn = db.session.get(Turn, turn_id)
+            if not turn:
+                return jsonify({'error': 'Turn not found'}), 404
+            
+            # Get speaker from request or use turn's speaker
+            data = request.get_json() or {}
+            speaker = data.get('speaker', turn.speaker)
+            
+            # Initialize TTS service
+            tts_service = get_tts_service()
+            
+            # Generate audio
+            audio_file_path = tts_service.generate_speech_for_conversation_turn(
+                text=turn.message,
+                speaker_model=speaker
+            )
+            
+            # Extract filename from path
+            audio_filename = os.path.basename(audio_file_path)
+            
+            return jsonify({
+                'success': True,
+                'audio_filename': audio_filename,
+                'turn_id': turn_id
+            })
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/audio/<filename>')
+    def serve_audio(filename):
+        """Serve generated audio files."""
+        try:
+            from flask import send_file
+            from pathlib import Path
+            
+            # Try to get audio directory from TTS service, fallback to default
+            try:
+                tts_service = get_tts_service()
+                audio_dir = tts_service.audio_dir
+                print(f"TTS service audio directory: {audio_dir}")  # Debug logging
+                
+                # Ensure we have an absolute path
+                if not audio_dir.is_absolute():
+                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    audio_dir = Path(project_root) / audio_dir
+                    print(f"Converted to absolute path: {audio_dir}")  # Debug logging
+                    
+            except Exception as e:
+                print(f"TTS service failed, using fallback: {e}")  # Debug logging
+                # Fallback to default audio cache directory at project root
+                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                audio_dir = Path(project_root) / 'audio_cache'
+                print(f"Fallback audio directory: {audio_dir}")  # Debug logging
+            
+            audio_path = audio_dir / filename
+            print(f"Looking for audio file at: {audio_path}")  # Debug logging
+            
+            if not audio_path.exists():
+                print(f"Audio file not found at: {audio_path}")  # Debug logging
+                return jsonify({'error': f'Audio file not found: {filename}'}), 404
+            
+            return send_file(
+                str(audio_path),
+                mimetype='audio/mpeg',
+                as_attachment=False
+            )
+            
+        except Exception as e:
+            import traceback
+            print(f"Audio serving error: {e}")
+            print(traceback.format_exc())
+            return jsonify({'error': f'Audio serving failed: {str(e)}'}), 500
     
     # Error handlers
     @app.errorhandler(404)
